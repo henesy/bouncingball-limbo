@@ -100,10 +100,31 @@ init(ctxt: ref Context, argv: list of string) {
 		alt {
 		ctl := <-w.ctl or
 		ctl = <-w.ctxt.ctl =>
+			sys->print("%s\n", ctl);
 			w.wmctl(ctl);
+
+			# Handle ctl messages as per wmclient(2)
 			if(ctl != nil && ctl[0] == '!')
-				# draw ball again(?)
-				;
+				case ctl {
+				"move" =>
+					# move x y
+					;
+				"raise" =>
+					# Set window focus
+					w.focused = 1;	# Deprecated?
+					;
+				"task" =>
+					# Stop drawing, window is hidden
+					;
+				"untask" =>
+					# Start drawing again - need to redraw bg
+					# TODO - this doesn't work
+					w.image.draw(w.image.r, bg, nil, ZP);
+					w.image.flush(Draw->Flushnow);
+					;
+				"exit" =>
+					break;
+				}
 
 		p := <-w.ctxt.ptr =>
 			w.pointer(*p);
