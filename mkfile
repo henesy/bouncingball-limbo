@@ -1,4 +1,4 @@
-</mkfile
+</mkconfig
 
 TARG = bb.dis
 
