@@ -9,12 +9,6 @@ Demonstrates a bouncing red ball in a window inside Inferno.
 - [draw-point(2)](http://man.postnix.pw/purgatorio/2/draw-point)
 - [draw-image(2)](http://man.postnix.pw/purgatorio/2/draw-image)
 
-## Bugs
-
-- No window resize handling
-- No window focus handling
-- No mouse input handling
-
 ## Build
 
 	mk

@@ -8,6 +8,7 @@ include "draw.m";
 	Point, Rect, Display, Image, Screen, Context: import draw;
 
 include "tk.m";
+	tk: Tk;
 include "wmclient.m";
 	wmclient: Wmclient;
 	Window: import wmclient;
@@ -24,6 +25,8 @@ NE, NW, SE, SW: con iota;	# Directions ball can move
 ZP: con Point(0, 0);		# 0,0 point
 delay: con 10;				# ms to draw on
 
+win: ref Wmclient->Window;	# Primary window handle
+winimg: ref Image;
 bg: ref Image;				# Window background color
 width: int = 600;			# Width of window
 
@@ -36,8 +39,11 @@ ballbg: ref Image;
 # Draw a bouncing ball on the screen
 init(ctxt: ref Context, argv: list of string) {
 	sys = load Sys Sys->PATH;
+
 	draw = load Draw Draw->PATH;
+	tk = load Tk Tk->PATH;
 	wmclient = load Wmclient Wmclient->PATH;
+
 	arg := load Arg Arg->PATH;
 	rand := load Rand Rand->PATH;
 	time := load Daytime Daytime->PATH;
@@ -63,33 +69,46 @@ init(ctxt: ref Context, argv: list of string) {
 	# Window setup
 	sys->pctl(Sys->NEWPGRP, nil);
 	wmclient->init();
+	
+	winctxt := ctxt;
+	if(winctxt == nil)
+		winctxt = wmclient->makedrawcontext();
 
-	w := wmclient->window(ctxt, "Bouncing ball", Wmclient->Appl);
+	display := winctxt.display;
 
-	display := w.display;
+	w := wmclient->window(winctxt, "Bouncing ball", Wmclient->Appl);
+	win = w;
 
-	# Graphical artifacts
+	# Load graphical artifacts
 	bg = display.rgb(192, 192, 192);	# 0xC0C0C0FF
 	ballbg = display.newimage(Rect(ZP, (radius+2,radius+2)), Draw->RGB24, 1, int 16rC0C0C0FF);	# (192, 192, 192)
 	ballimg = display.newimage(Rect(ZP, (radius,radius)), Draw->RGB24, 1, Draw->Red);
 
 	# Make the window appear
 	w.reshape(Rect(ZP, (width, width)));
-	w.startinput("ptr" :: nil);
-	w.onscreen(nil);
+
+	# Bring the window to focus
+	w.onscreen("place");
+
+	# Start receiving input
+	w.startinput("kbd" :: "ptr" :: nil);
 
 	# Set initial ball location to above center of window
 	# We don't want exact center to avoid cornering ☺
 	# Windows are represented as rectangles
 	# r.min in this case is top left of a window, r.max bottom right
-	r := w.image.r;
+	winimg = w.image;
+
+	sys->sleep(5);
+	
+	r := w.imager(winimg.r);
 	offset := r.max.sub(r.min).div(2);
 	offset = offset.sub(Point(0, offset.y/2));
 	BP = r.min.add(offset);
 
 	# Draw background and ball initially
-	w.image.draw(w.image.r, bg, nil, ZP);
-	drawball(w.image);
+	w.image.draw(winimg.r, bg, nil, ZP);
+
 	bearing = rand->rand(4);	# 4 bearings
 
 	# Kick off draw timer
@@ -98,61 +117,58 @@ init(ctxt: ref Context, argv: list of string) {
 
 	for(;;)
 		alt {
-		ctl := <-w.ctl or
-		ctl = <-w.ctxt.ctl =>
+		ctl := <-w.ctl
+		or	ctl = <-w.ctxt.ctl =>
 			sys->print("%s\n", ctl);
 			w.wmctl(ctl);
 
 			# Handle ctl messages as per wmclient(2)
-			if(ctl != nil && ctl[0] == '!')
-				case ctl {
-				"move" =>
-					# move x y
-					;
-				"raise" =>
-					# Set window focus
-					w.focused = 1;	# Deprecated?
-					;
-				"task" =>
-					# Stop drawing, window is hidden
-					;
-				"untask" =>
-					# Start drawing again - need to redraw bg
-					# TODO - this doesn't work
-					w.image.draw(w.image.r, bg, nil, ZP);
-					w.image.flush(Draw->Flushnow);
-					;
-				"exit" =>
-					break;
-				}
+			if(ctl == "exit")
+					exit;
+
+			if(w.image != winimg){
+				winimg = w.image;
+
+				# Re-draw background
+				w.image.draw(winimg.r, bg, nil, ZP);
+
+				# TODO - re-align ball properly, this jumps to middle
+				r = w.imager(winimg.r);
+				offset = r.max.sub(r.min).div(2);
+				offset = offset.sub(Point(0, offset.y/2));
+				BP = r.min.add(offset);
+
+				# TODO - update collision borders
+				drawball();
+			}
 
 		p := <-w.ctxt.ptr =>
 			w.pointer(*p);
 
 		# Draw on ticks
 		<-tickchan =>
-			drawball(w.image);
+			drawball();
 		}
 
 	exit;
 }
 
 # Draw the ball for a frame
-drawball(screen: ref Image) {
+drawball() {
+	screen := winimg;
 	if(screen == nil)
 		return;
 
 	# Get the range of pixels in the screen 
-	r := screen.r;
+	r := win.imager(screen.r);
 
 	# Draw an ellipse around where we were in the bg color of thickness 2px
-	targ := r.min.add(BP);
+	# This smooths the animation
+	targ := BP;
 	screen.ellipse(targ, radius+2, radius+2, 2, ballbg, ZP);
 
 	# Move circle
-	mvball(screen, bear(BP));
-
-	targ = r.min.add(BP);
+	mvball(bear(BP));
 
 	# Draw circle
 	screen.fillellipse(targ, radius, radius, ballimg, ZP);
@@ -185,18 +201,19 @@ bear(p: Point): Point {
 }
 
 # Move the ball in reference to screen corner
-mvball(screen: ref Image, p: Point) {
+mvball(p: Point) {
+	screen := winimg;
 	if(screen == nil)
 		return;
 
 	# Window rectangle
-	r := screen.r;
+	r := win.imager(winimg.r);
 
 	# Make the rectangle smaller by radius for collision
 	r.min.x += radius;
 	r.min.y -= radius;
 	r.max.x -= radius;
-	r.max.y -= radius*3;	# Oh no is this some π shenanigans?
+	r.max.y -= radius;	# Oh no is this some π shenanigans?
 
 	# Point.add() means negative values should concatenate just fine
 	targ := p;
