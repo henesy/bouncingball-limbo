@@ -2,6 +2,8 @@
 
 Demonstrates a bouncing red ball in a window inside Inferno. 
 
+![Bouncing Ball](./bb.png)
+
 ## Reading
 
 - [draw-intro(2)](http://man.postnix.pw/purgatorio/2/draw-0intro)
