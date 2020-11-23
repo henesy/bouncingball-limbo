@@ -31,7 +31,7 @@ delay: con 10;				# ms to draw on
 bg: ref Image;				# Window background color
 width: int = 600;			# Width of window
 
-lastopt: int;				# To avoid ball getitng stuck
+lastopt: int;				# To avoid ball getting stuck
 bearing: int;				# Starting movement vector of ball
 radius: int = 20;			# Radius of ball
 BP: Point;					# Point of ball relative to top left corner
