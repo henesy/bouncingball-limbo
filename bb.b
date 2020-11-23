@@ -159,9 +159,6 @@ drawball() {
 	if(screen == nil)
 		return;
 
-	# Get the range of pixels in the screen 
-	r := win.imager(screen.r);
-
 	# Draw an ellipse around where we were in the bg color of thickness 2px
 	# This smooths the animation
 	targ := BP;
@@ -211,9 +208,9 @@ mvball(p: Point) {
 
 	# Make the rectangle smaller by radius for collision
 	r.min.x += radius;
-	r.min.y -= radius;
+	r.min.y -= radius/3;	# Oh no, is this some π shenanigans?
 	r.max.x -= radius;
-	r.max.y -= radius;	# Oh no is this some π shenanigans?
+	r.max.y -= radius;
 
 	# Point.add() means negative values should concatenate just fine
 	targ := p;
