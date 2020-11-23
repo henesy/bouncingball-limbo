@@ -1,0 +1,34 @@
+.TH BOUNCING-BALL 1
+.SH NAME
+bb \- Show a bouncing red ball
+.SH SYNOPSIS
+.B wm/bb
+[
+.B -r
+.I radius
+] [
+.B -w
+.I width
+]
+.br 
+.SH DESCRIPTION
+A demonstration of a simple graphical application which uses
+.IR wmclient (2). 
+.PP
+The options are:
+.TP 1i
+.BI \-r " radius"
+Set ball radius to
+.I radius. 
+.TP
+.BI \-w " width"
+Set intial screen proportions to
+.I width
+by
+.I width
+pixels. 
+.SH SOURCE
+.B /appl/wm/bb.b
+.br
+.SH "SEE ALSO"
+.IR wmclient (2)

@@ -13,28 +13,30 @@ include "wmclient.m";
 	wmclient: Wmclient;
 	Window: import wmclient;
 
-include "arg.m";
 include "daytime.m";
 include "rand.m";
+	rand: Rand;
+
+include "arg.m";
+
 
 BouncingBall: module {
 	init:	fn(ctxt: ref Context, argv: list of string);
 };
 
-NE, NW, SE, SW: con iota;	# Directions ball can move
-ZP: con Point(0, 0);		# 0,0 point
+NE, NW, SE, SW: con iota;		# Directions ball can move
+ZP: con Point(0, 0);			# 0,0 point
 delay: con 10;				# ms to draw on
 
-win: ref Wmclient->Window;	# Primary window handle
-winimg: ref Image;
 bg: ref Image;				# Window background color
 width: int = 600;			# Width of window
 
+lastopt: int;				# To avoid ball getitng stuck
 bearing: int;				# Starting movement vector of ball
 radius: int = 20;			# Radius of ball
 BP: Point;					# Point of ball relative to top left corner
 ballimg: ref Image;			# Image of ball
-ballbg: ref Image;
+ballbg: ref Image;			# Background color to circumscribe
 
 # Draw a bouncing ball on the screen
 init(ctxt: ref Context, argv: list of string) {
@@ -45,7 +47,7 @@ init(ctxt: ref Context, argv: list of string) {
 	wmclient = load Wmclient Wmclient->PATH;
 
 	arg := load Arg Arg->PATH;
-	rand := load Rand Rand->PATH;
+	rand = load Rand Rand->PATH;
 	time := load Daytime Daytime->PATH;
 
 	rand->init(time->now());
@@ -76,8 +78,7 @@ init(ctxt: ref Context, argv: list of string) {
 
 	display := winctxt.display;
 
-	w := wmclient->window(winctxt, "Bouncing ball", Wmclient->Appl);
-	win = w;
+	w := wmclient->window(winctxt, "Bouncing Ball", Wmclient->Appl);
 
 	# Load graphical artifacts
 	bg = display.rgb(192, 192, 192);	# 0xC0C0C0FF
@@ -97,17 +98,14 @@ init(ctxt: ref Context, argv: list of string) {
 	# We don't want exact center to avoid cornering ☺
 	# Windows are represented as rectangles
 	# r.min in this case is top left of a window, r.max bottom right
-	winimg = w.image;
-
-	sys->sleep(5);
 	
-	r := w.imager(winimg.r);
+	r := w.imager(w.image.r);
 	offset := r.max.sub(r.min).div(2);
 	offset = offset.sub(Point(0, offset.y/2));
 	BP = r.min.add(offset);
 
 	# Draw background and ball initially
-	w.image.draw(winimg.r, bg, nil, ZP);
+	w.image.draw(w.image.r, bg, nil, ZP);
 
 	bearing = rand->rand(4);	# 4 bearings
 
@@ -126,36 +124,32 @@ init(ctxt: ref Context, argv: list of string) {
 			if(ctl == "exit")
 					exit;
 
-			if(w.image != winimg){
-				winimg = w.image;
+			# Re-draw background
+			w.image.draw(w.image.r, bg, nil, ZP);
 
-				# Re-draw background
-				w.image.draw(winimg.r, bg, nil, ZP);
+			# TODO - re-align ball properly, this jumps to middle
+			r = w.imager(w.image.r);
+			offset = r.max.sub(r.min).div(2);
+			offset = offset.sub(Point(0, offset.y/2));
+			BP = r.min.add(offset);
 
-				# TODO - re-align ball properly, this jumps to middle
-				r = w.imager(winimg.r);
-				offset = r.max.sub(r.min).div(2);
-				offset = offset.sub(Point(0, offset.y/2));
-				BP = r.min.add(offset);
-
-				# TODO - update collision borders
-				drawball();
-			}
+			# TODO - update collision borders
+			drawball(w);
 
 		p := <-w.ctxt.ptr =>
 			w.pointer(*p);
 
 		# Draw on ticks
 		<-tickchan =>
-			drawball();
+			drawball(w);
 		}
 
 	exit;
 }
 
 # Draw the ball for a frame
-drawball() {
-	screen := winimg;
+drawball(win: ref Wmclient->Window) {
+	screen := win.image;
 	if(screen == nil)
 		return;
 
@@ -165,13 +159,76 @@ drawball() {
 	screen.ellipse(targ, radius+2, radius+2, 2, ballbg, ZP);
 
 	# Move circle
-	mvball(bear(BP));
+	mvball(win, bear(BP));
 
 	# Draw circle
 	screen.fillellipse(targ, radius, radius, ballimg, ZP);
+}
 
-	# Flush screen
-	#screen.flush(Draw->Flushnow);
+
+# Move the ball in reference to screen corner
+mvball(win: ref Wmclient->Window, p: Point) {
+	screen := win.image;
+	if(screen == nil)
+		return;
+
+	# Window rectangle
+	r := win.imager(win.image.r);
+
+	# Make the rectangle smaller by radius for collision
+	r.min.x += radius;
+	r.min.y -= radius/3;	# Oh no, is this some π shenanigans?
+	r.max.x -= radius;
+	r.max.y -= radius;
+
+	# Point.add() means negative values should concatenate just fine
+	targ := p;
+
+	# Check if we're within the rectangle
+	if(! targ.in(r)) {
+
+		# Randomize a bit
+		opt := rand->rand(2);
+		if(opt == lastopt);
+			opt = !opt;
+
+		# We rotate our direction
+		case bearing {
+		NE =>
+			if(opt)
+				bearing = NW;
+			else
+				bearing = SW;
+		NW =>
+			if(opt)
+				bearing = NE;
+			else
+				bearing = SE;
+		SE =>
+			if(opt)
+				bearing = SW;
+			else
+				bearing = NW;
+		SW =>
+			if(opt)
+				bearing = NE;
+			else
+				bearing = SE;
+		}
+
+		lastopt = opt;
+		targ = BP;
+	}
+
+	BP = targ;
+}
+
+# Ticks every delay milliseconds to draw
+ticker(tickchan: chan of int) {
+	for(;;) {
+		sys->sleep(delay);
+		tickchan <-= 1;
+	}
 }
 
 # Apply bearing shifts to the ball
@@ -195,51 +252,4 @@ bear(p: Point): Point {
 	}
 
 	return Point(x, y);
-}
-
-# Move the ball in reference to screen corner
-mvball(p: Point) {
-	screen := winimg;
-	if(screen == nil)
-		return;
-
-	# Window rectangle
-	r := win.imager(winimg.r);
-
-	# Make the rectangle smaller by radius for collision
-	r.min.x += radius;
-	r.min.y -= radius/3;	# Oh no, is this some π shenanigans?
-	r.max.x -= radius;
-	r.max.y -= radius;
-
-	# Point.add() means negative values should concatenate just fine
-	targ := p;
-
-	# Check if we're within the rectangle
-	if(! targ.in(r)) {
-
-		# We rotate our direction
-		case bearing {
-		NE =>
-			bearing = SE;
-		NW => 
-			bearing = NE;
-		SE =>
-			bearing = SW;
-		SW =>
-			bearing = NW;
-		}
-
-		targ = BP;
-	}
-
-	BP = targ;
-}
-
-# Ticks every delay milliseconds to draw
-ticker(tickchan: chan of int) {
-	for(;;) {
-		sys->sleep(delay);
-		tickchan <-= 1;
-	}
 }

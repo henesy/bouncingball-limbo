@@ -17,6 +17,15 @@ or
 
 	limbo bb.b
 
+## Install
+
+Install to `wm/bb` and install the manual as well:
+
+	mk install
+	mk man
+
+The [manual](./bb.man) is installed as `bb(1)`. 
+
 ## Usage
 
 	usage: bb [-r radius] [-w width]
